@@ -2,7 +2,7 @@
 
 **版本**: v1.0  
 **适用**: macOS 13+ (Ventura/Sonoma/Sequoia)，Intel & Apple Silicon  
-**场景**: 本地部署 + 外网可用 + 本地 LLM (Ollama)  
+**场景**: macOS 部署 + 外网可用 + 云端 API Key + API Server + Web Dashboard  
 **日期**: 2026-05-21
 
 ---
@@ -13,12 +13,14 @@
 2. [安装前准备](#安装前准备)
 3. [方案 A：一键安装（推荐）](#方案-a一键安装推荐)
 4. [方案 B：手动安装](#方案-b手动安装)
-5. [配置本地 LLM (Ollama)](#配置本地-llm-ollama)
-6. [验证安装](#验证安装)
-7. [启动与使用](#启动与使用)
-8. [升级](#升级)
-9. [故障排查](#故障排查)
-10. [附录](#附录)
+5. [配置云端模型（API Key）](#配置云端模型api-key)
+6. [开启 API Server](#开启-api-server)
+7. [开启 Web Dashboard](#开启-web-dashboard)
+8. [验证安装](#验证安装)
+9. [启动与使用](#启动与使用)
+10. [升级](#升级)
+11. [故障排查](#故障排查)
+12. [附录](#附录)
 
 ---
 
@@ -28,9 +30,9 @@
 |------|---------|------|
 | **macOS 版本** | 13 Ventura | 14 Sonoma / 15 Sequoia |
 | **芯片** | Intel x86_64 或 Apple Silicon (M1/M2/M3/M4) | Apple Silicon |
-| **内存** | 8 GB | 16 GB+（本地模型需要更多） |
-| **磁盘** | 5 GB 可用空间 | 20 GB+（含模型文件） |
-| **网络** | 有外网（安装时需要） | 有外网 |
+| **内存** | 8 GB | 16 GB |
+| **磁盘** | 5 GB 可用空间 | 10 GB |
+| **网络** | 有外网（安装 + 调云端 API） | 有外网 |
 | **前置依赖** | git | git + Homebrew |
 
 > ⚠️ **Apple Silicon 注意**：Ollama 在 Apple Silicon 上会自动使用 Metal GPU 加速，性能远好于 Intel Mac。
@@ -208,86 +210,165 @@ npx playwright install chromium
 
 ---
 
-## 配置本地 LLM (Ollama)
+## 配置云端模型（API Key）
 
-### Step 1 — 安装 Ollama
+你不需要本地模型。Hermes 直接调用 OpenAI / Anthropic / OpenRouter / Kimi / DeepSeek / 阿里通义等云端 API。
+
+### Step 1 — 交互式配置（推荐）
 
 ```bash
-# 一键安装（官网脚本）
-curl -fsSL https://ollama.com/install.sh | sh
+hermes model
 ```
 
-或手动下载：
+按提示：
+1. 选 Provider（OpenAI / Anthropic / OpenRouter / Kimi / DeepSeek / DashScope…）
+2. 选具体模型（如 `gpt-4o`、`claude-opus-4.6`、`deepseek-chat`）
+3. 输入 API Key（自动加密存到 `~/.hermes/.env`）
+
+### Step 2 — 验证 Key 已写入
 
 ```bash
-# Apple Silicon
-sudo curl -L https://ollama.com/download/ollama-darwin -o /usr/local/bin/ollama
-sudo chmod +x /usr/local/bin/ollama
-
-# Intel Mac 用 ollama-darwin-amd64
+cat ~/.hermes/.env
 ```
 
-### Step 2 — 下载本地模型
+你会看到类似：
 
 ```bash
-# 启动 Ollama 服务
-ollama serve &
-
-# 下载 Llama 3.1 70B（约 40GB，推荐 32GB+ 内存）
-ollama pull llama3.1:70b
-
-# 或者下载轻量版（8B，约 5GB，8GB 内存可跑）
-ollama pull llama3.1:8b
-
-# 或者下载 Qwen 2.5（中文表现好）
-ollama pull qwen2.5:14b
+OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-> ⚠️ **内存不足怎么办**：用 8B 或 14B 模型，或加 `--quantize q4_0` 参数。Apple Silicon 的 Unified Memory 架构下，16GB 内存可以跑 14B 模型。
-
-### Step 3 — 配置 Hermes 使用本地模型
+如果没有，手动写：
 
 ```bash
-# 编辑 Hermes 配置
 nano ~/.hermes/.env
 ```
 
-写入以下内容：
+主流 Provider 对照：
+
+| Provider | `.env` 变量名 | 获取地址 |
+|----------|-------------|----------|
+| **OpenAI** | `OPENAI_API_KEY` | https://platform.openai.com/api-keys |
+| **Anthropic** | `ANTHROPIC_API_KEY` | https://console.anthropic.com/settings/keys |
+| **OpenRouter** | `OPENROUTER_API_KEY` | https://openrouter.ai/keys |
+| **Kimi** | `KIMI_API_KEY` | https://platform.moonshot.cn/console/api-keys |
+| **DeepSeek** | `DEEPSEEK_API_KEY` | https://platform.deepseek.com/api_keys |
+| **阿里通义** | `DASHSCOPE_API_KEY` | https://dashscope.console.aliyun.com/apiKey |
+
+### Step 3 — 确认模型配置
 
 ```bash
-# ===== LLM 配置（本地 Ollama） =====
-OPENAI_BASE_URL=http://127.0.0.1:11434/v1
-OPENAI_API_KEY=ollama
+hermes doctor        # 检查连接是否通
+hermes status        # 看当前用的模型
+```
 
-# 模型选择（根据你下载的）
-# OPENAI_MODEL=llama3.1:70b      # 70B，质量最高，需要 32GB+ 内存
-OPENAI_MODEL=llama3.1:8b        # 8B，轻量，8GB 内存可跑
-# OPENAI_MODEL=qwen2.5:14b       # 14B，中文好，16GB 内存可跑
+---
 
-# ===== API Server（可选，供外部调用） =====
+## 开启 API Server
+
+把 Hermes 暴露为 OpenAI 兼容 API，供前端或他人调用。
+
+### Step 1 — 编辑 `.env`
+
+```bash
+nano ~/.hermes/.env
+```
+
+在 Provider Key 下面加：
+
+```bash
+# ===== Provider Key（上面已有）=====
+OPENAI_API_KEY=sk-xxx
+
+# ===== API Server =====
 API_SERVER_ENABLED=true
-API_SERVER_KEY=your-local-api-key-here
-
-# ===== 禁用不需要的云端功能 =====
-WEB_SEARCH_ENABLED=false
-TTS_ENABLED=false
-STT_ENABLED=false
-IMAGE_GENERATION_ENABLED=false
-# BROWSER_ENABLED=true           # 如果装了 Chromium，可以保留
+API_SERVER_KEY=sk-your-server-secret-key
 ```
 
-### Step 4 — 测试 Ollama
+### Step 2 — 启动 Gateway
 
 ```bash
-# 确认 Ollama 在跑
-curl http://localhost:11434/api/tags
-
-# 直接对话测试
-curl http://localhost:11434/api/chat -d '{
-  "model": "llama3.1:8b",
-  "messages": [{"role": "user", "content": "你好"}]
-}'
+hermes gateway
 ```
+
+看到：
+
+```
+[API Server] API server listening on http://127.0.0.1:8642
+```
+
+### Step 3 — 测试
+
+```bash
+curl http://localhost:8642/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-server-secret-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "hermes-agent",
+    "messages": [{"role": "user", "content": "Hello"}]
+  }'
+```
+
+有回复 → API 就绪。
+
+### 暴露给局域网（可选）
+
+```bash
+nano ~/.hermes/.env
+```
+
+```bash
+API_SERVER_ENABLED=true
+API_SERVER_KEY=sk-your-server-secret-key
+API_SERVER_HOST=0.0.0.0        # 监听所有网卡
+API_SERVER_PORT=8642
+```
+
+重启 `hermes gateway`，局域网内访问 `http://你的内网IP:8642/v1`。
+
+> ⚠️ 必须设强密钥。公网部署务必加 Nginx/Caddy + HTTPS，不要裸奔。
+
+---
+
+## 开启 Web Dashboard
+
+浏览器里监控和配置 Hermes，不用碰终端。
+
+### Step 1 — 装依赖（Dashboard 额外组件）
+
+```bash
+cd ~/.hermes/hermes-agent
+export VIRTUAL_ENV="$(pwd)/venv"
+uv pip install -e ".[web,pty]"
+```
+
+### Step 2 — 启动
+
+```bash
+hermes dashboard
+```
+
+自动打开浏览器：`http://127.0.0.1:9119`
+
+### Step 3 — 常用功能
+
+| 页面 | 功能 |
+|------|------|
+| **Status** | 看模型、工具、Gateway 健康度 |
+| **Sessions** | 浏览历史对话、搜索、继续聊天 |
+| **Configuration** | 改 API Key、切模型、调温度（不用编辑文件） |
+| **Cron** | 管理定时任务 |
+| **Memory** | 查看 Hermes 记住的内容 |
+| **Skills** | 搜索、安装技能 |
+| **Logs** | 实时日志 |
+| **Chat** | 浏览器内直接和 Hermes 对话 |
+
+### 带聊天功能的 Dashboard
+
+```bash
+hermes dashboard --tui
+```
+
+左侧菜单出现 **Chat**，流式输出、Markdown 渲染、工具调用展开。
 
 ---
 
@@ -330,25 +411,29 @@ Summarize this repo in 5 bullets and tell me what the main entrypoint is.
 
 如果 Hermes 能回复且没有报错，安装成功。
 
-### 验证 API Server（如果启用了）
+### 验证 API Server
 
 ```bash
 # 健康检查
-curl -s http://localhost:8642/health | python3 -m json.tool
+curl -s http://localhost:8642/health
 
 # 列出模型
 curl -s http://localhost:8642/v1/models \
-  -H "Authorization: Bearer your-local-api-key-here" | python3 -m json.tool
+  -H "Authorization: Bearer sk-your-server-secret-key"
 
 # 测试对话
 curl -s http://localhost:8642/v1/chat/completions \
-  -H "Authorization: Bearer your-local-api-key-here" \
+  -H "Authorization: Bearer sk-your-server-secret-key" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "llama3.1:8b",
+    "model": "hermes-agent",
     "messages": [{"role": "user", "content": "Hello"}]
-  }' | python3 -m json.tool
+  }'
 ```
+
+### 验证 Web Dashboard
+
+浏览器访问 `http://127.0.0.1:9119`，能看到状态页面即正常。
 
 ---
 
@@ -480,29 +565,25 @@ npx playwright install chromium
 BROWSER_ENABLED=false
 ```
 
-### Q5: Ollama 模型下载慢
+### Q5: 前端连不上 API Server
 
 ```bash
-# 设置镜像（国内用户）
-export OLLAMA_HOST=0.0.0.0
-export OLLAMA_ORIGINS=*
+# 确认 Hermes 监听了正确地址
+cat ~/.hermes/.env | grep API_SERVER_HOST
 
-# 或使用代理
-export HTTPS_PROXY=http://your-proxy:port
-ollama pull llama3.1:8b
+# 确认防火墙没拦
+sudo lsof -i :8642
 ```
 
-### Q6: Apple Silicon 上 Ollama 提示 "model requires more system memory"
+### Q6: Dashboard 空白或报错
 
 ```bash
-# 换更小的模型
-ollama pull llama3.1:8b
+# 确认 web extra 已装
+cd ~/.hermes/hermes-agent
+uv pip list | grep -E "fastapi|uvicorn"
 
-# 或量化版本
-ollama pull llama3.1:8b --quantize q4_0
-
-# 或限制并发
-# 在 ~/.ollama/config 中设置 num_thread
+# 没装就装
+uv pip install -e ".[web,pty]"
 ```
 
 ### Q7: `hermes doctor` 报 Python 版本不对
@@ -546,17 +627,20 @@ uv pip install -e ".[all]"
 └── .local/bin/hermes           # 命令入口
 ```
 
-### 附录 B：环境变量参考
+### 附录 B：环境变量参考（云端场景）
 
 | 变量 | 说明 | 示例 |
 |------|------|------|
-| `OPENAI_BASE_URL` | LLM API 地址 | `http://127.0.0.1:11434/v1` |
-| `OPENAI_API_KEY` | API Key | `ollama` |
-| `OPENAI_MODEL` | 模型名称 | `llama3.1:8b` |
+| `OPENAI_API_KEY` | OpenAI API Key | `sk-xxx` |
+| `ANTHROPIC_API_KEY` | Anthropic Key | `sk-ant-xxx` |
+| `OPENROUTER_API_KEY` | OpenRouter Key | `sk-or-xxx` |
+| `KIMI_API_KEY` | Kimi Key | `xxx` |
+| `DEEPSEEK_API_KEY` | DeepSeek Key | `xxx` |
+| `DASHSCOPE_API_KEY` | 阿里通义 Key | `xxx` |
 | `API_SERVER_ENABLED` | 启用 API Server | `true` |
-| `API_SERVER_KEY` | API Server 鉴权 | `sk-xxxx` |
-| `WEB_SEARCH_ENABLED` | 网页搜索 | `false` |
-| `TTS_ENABLED` | 语音合成 | `false` |
+| `API_SERVER_PORT` | API 端口 | `8642` |
+| `API_SERVER_HOST` | 绑定地址 | `127.0.0.1` 或 `0.0.0.0` |
+| `API_SERVER_KEY` | API 鉴权密钥 | `sk-yours` |
 | `BROWSER_ENABLED` | 浏览器工具 | `true` |
 | `HERMES_HOME` | 数据目录 | `~/.hermes` |
 
@@ -565,20 +649,17 @@ uv pip install -e ".[all]"
 | 项目 | Apple Silicon (M1/M2/M3/M4) | Intel Mac |
 |------|------------------------------|-----------|
 | **Node.js 下载** | `node-v22.14.0-darwin-arm64.tar.xz` | `node-v22.14.0-darwin-x64.tar.xz` |
-| **Ollama GPU 加速** | Metal（原生支持，速度快） | 无（纯 CPU） |
-| **推荐模型** | 14B/70B 均可跑 | 建议 8B |
-| **内存要求** | 16GB 可跑 14B | 32GB 才能跑 14B |
+| **内存** | 16GB 推荐 | 16GB 推荐 |
+| **安装路径** | `~/.hermes/hermes-agent` | 相同 |
 
 ### 附录 D：相关链接
 
 - **Hermes 官方文档**: https://hermes-agent.nousresearch.com/docs
 - **Hermes GitHub**: https://github.com/NousResearch/hermes-agent
-- **Ollama 官网**: https://ollama.com
-- **Ollama 模型库**: https://ollama.com/library
 - **uv 文档**: https://docs.astral.sh/uv
 - **本仓库**: https://github.com/superGYC/Hermes
 
 ---
 
 *本手册基于 Hermes Agent v0.14.0 官方 install.sh 和文档编写。*  
-*macOS 版本以 Sonoma/Sequoia 为主，Ventura 亦兼容。*
+*场景：macOS + 外网 + 云端 API + API Server + Web Dashboard。*
