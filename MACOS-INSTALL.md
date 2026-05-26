@@ -225,22 +225,28 @@ hermes model
 2. 选具体模型（如 `gpt-4o`、`claude-opus-4.6`、`deepseek-chat`）
 3. 输入 API Key（自动加密存到 `~/.hermes/.env`）
 
-### Step 2 — 验证 Key 已写入
+### Step 2 — 改配置文件（两个文件）
 
-```bash
-cat ~/.hermes/.env
-```
+Hermes 把配置拆到两个地方：
 
-你会看到类似：
-
-```bash
-OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx
-```
-
-如果没有，手动写：
+| 文件 | 放什么 |
+|------|--------|
+| **`~/.hermes/.env`** | **Secrets** — API Key、API Server 密钥、密码 |
+| **`~/.hermes/config.yaml`** | **常规设置** — 模型名、温度、工具开关、最大 Token |
 
 ```bash
 nano ~/.hermes/.env
+```
+
+写你的 Provider Key：
+
+```bash
+# ===== OpenAI 示例 =====
+OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx
+
+# ===== API Server（可选，供外部调用）=====
+API_SERVER_ENABLED=true
+API_SERVER_KEY=sk-your-server-secret-key
 ```
 
 主流 Provider 对照：
@@ -254,11 +260,29 @@ nano ~/.hermes/.env
 | **DeepSeek** | `DEEPSEEK_API_KEY` | https://platform.deepseek.com/api_keys |
 | **阿里通义** | `DASHSCOPE_API_KEY` | https://dashscope.console.aliyun.com/apiKey |
 
-### Step 3 — 确认模型配置
+然后改 `config.yaml` 配常规项：
 
 ```bash
-hermes doctor        # 检查连接是否通
-hermes status        # 看当前用的模型
+nano ~/.hermes/config.yaml
+```
+
+```yaml
+# 默认模型（格式：provider/model）
+model: openai/gpt-4o
+
+# 温度
+temperature: 0.7
+
+# 最大输出 token
+max_tokens: 4096
+
+# 工具开关
+terminal:
+  backend: local          # local / docker / ssh
+web_search:
+  enabled: true
+browser:
+  enabled: true
 ```
 
 ---
